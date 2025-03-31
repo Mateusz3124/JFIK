@@ -22,16 +22,33 @@ public class LLVMActions extends LangXBaseListener {
    Stack<Value> stack = new Stack<Value>();
 
    @Override
+   public void exitAssignType(LangXParser.AssignTypeContext ctx) {
+      String ID = ctx.ID().getText();
+      String type = ctx.type().getText();
+
+      if (type.equals("int")) {
+         variables.put(ID, VarType.INT);
+         LLVMGenerator.declare_i32(ID);
+      } else if (type.equals("real")) {
+         variables.put(ID, VarType.REAL);
+         LLVMGenerator.declare_double(ID);
+      } else {
+         error(ctx.getStart().getLine(), "unknown type " + type);
+      }
+   }
+
+   @Override
    public void exitAssign(LangXParser.AssignContext ctx) {
       String ID = ctx.ID().getText();
       Value v = stack.pop();
-      variables.put(ID, v.type);
-      if (v.type == VarType.INT) {
-         LLVMGenerator.declare_i32(ID);
+      VarType type = variables.get(ID);
+      if (type != v.type) {
+         error(ctx.getStart().getLine(), "Incompatible types expected type " + type + " got type " + v.type);
+      }
+      if (type == VarType.INT) {
          LLVMGenerator.assign_i32(ID, v.name);
       }
-      if (v.type == VarType.REAL) {
-         LLVMGenerator.declare_double(ID);
+      if (type == VarType.REAL) {
          LLVMGenerator.assign_double(ID, v.name);
       }
    }
@@ -70,6 +87,24 @@ public class LLVMActions extends LangXBaseListener {
    }
 
    @Override
+   public void exitSub(LangXParser.SubContext ctx) {
+      Value v1 = stack.pop();
+      Value v2 = stack.pop();
+      if (v1.type == v2.type) {
+         if (v1.type == VarType.INT) {
+            LLVMGenerator.sub_i32(v2.name, v1.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+         }
+         if (v1.type == VarType.REAL) {
+            LLVMGenerator.sub_double(v2.name, v1.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
+         }
+      } else {
+         error(ctx.getStart().getLine(), "subtraction type mismatch");
+      }
+   }
+
+   @Override
    public void exitMult(LangXParser.MultContext ctx) {
       Value v1 = stack.pop();
       Value v2 = stack.pop();
@@ -80,6 +115,24 @@ public class LLVMActions extends LangXBaseListener {
          }
          if (v1.type == VarType.REAL) {
             LLVMGenerator.mult_double(v1.name, v2.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
+         }
+      } else {
+         error(ctx.getStart().getLine(), "mult type mismatch");
+      }
+   }
+
+   @Override
+   public void exitDiv(LangXParser.DivContext ctx) {
+      Value v1 = stack.pop();
+      Value v2 = stack.pop();
+      if (v1.type == v2.type) {
+         if (v1.type == VarType.INT) {
+            LLVMGenerator.div_i32(v2.name, v1.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+         }
+         if (v1.type == VarType.REAL) {
+            LLVMGenerator.div_double(v2.name, v1.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
          }
       } else {
@@ -120,12 +173,6 @@ public class LLVMActions extends LangXBaseListener {
    @Override
    public void exitRead(LangXParser.ReadContext ctx) {
       String ID = ctx.ID().getText();
-   
-      if (!variables.containsKey(ID)) {
-         variables.put(ID, VarType.INT);
-         LLVMGenerator.declare_i32(ID);
-      }
-   
       VarType type = variables.get(ID);
       if (type == VarType.INT) {
          LLVMGenerator.scanf_i32(ID);
