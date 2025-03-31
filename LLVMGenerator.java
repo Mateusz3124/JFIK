@@ -15,7 +15,7 @@ class LLVMGenerator{
    static void printf_i64(String id){
       main_text += "%"+reg+" = load i64, i64* %"+id+"\n";
       reg++;
-      main_text += "%"+reg+" = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @strpil, i32 0, i32 0), i64 %"+(reg-1)+")\n";
+      main_text += "%"+reg+" = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @strpil, i32 0, i32 0), i64 %"+(reg-1)+")\n";
       reg++;
    }
 
