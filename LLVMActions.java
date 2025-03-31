@@ -3,7 +3,7 @@ import java.util.HashMap;
 import java.util.Stack;
 
 enum VarType {
-   INT, REAL, UNKNOWN
+   INT, INT64, REAL, UNKNOWN
 }
 
 class Value {
@@ -29,6 +29,9 @@ public class LLVMActions extends LangXBaseListener {
       if (type.equals("int")) {
          variables.put(ID, VarType.INT);
          LLVMGenerator.declare_i32(ID);
+      } else if (type.equals("int64")) {
+         variables.put(ID, VarType.INT64);
+         LLVMGenerator.declare_i64(ID);
       } else if (type.equals("real")) {
          variables.put(ID, VarType.REAL);
          LLVMGenerator.declare_double(ID);
@@ -48,6 +51,9 @@ public class LLVMActions extends LangXBaseListener {
       if (type == VarType.INT) {
          LLVMGenerator.assign_i32(ID, v.name);
       }
+      if (type == VarType.INT64) {
+         LLVMGenerator.assign_i64(ID, v.name);
+      }
       if (type == VarType.REAL) {
          LLVMGenerator.assign_double(ID, v.name);
       }
@@ -64,6 +70,12 @@ public class LLVMActions extends LangXBaseListener {
    }
 
    @Override
+   public void exitInt64(LangXParser.Int64Context ctx) {
+      String val = ctx.INT64().getText();
+      stack.push(new Value(val.substring(0, val.length() - 1), VarType.INT64));
+   }
+
+   @Override
    public void exitReal(LangXParser.RealContext ctx) {
       stack.push(new Value(ctx.REAL().getText(), VarType.REAL));
    }
@@ -76,6 +88,10 @@ public class LLVMActions extends LangXBaseListener {
          if (v1.type == VarType.INT) {
             LLVMGenerator.add_i32(v1.name, v2.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+         }
+         if (v1.type == VarType.INT64) {
+            LLVMGenerator.add_i64(v1.name, v2.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT64));
          }
          if (v1.type == VarType.REAL) {
             LLVMGenerator.add_double(v1.name, v2.name);
@@ -95,6 +111,10 @@ public class LLVMActions extends LangXBaseListener {
             LLVMGenerator.sub_i32(v2.name, v1.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
          }
+         if (v1.type == VarType.INT64) {
+            LLVMGenerator.sub_i64(v2.name, v1.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT64));
+         }
          if (v1.type == VarType.REAL) {
             LLVMGenerator.sub_double(v2.name, v1.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
@@ -113,6 +133,10 @@ public class LLVMActions extends LangXBaseListener {
             LLVMGenerator.mult_i32(v1.name, v2.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
          }
+         if (v1.type == VarType.INT64) {
+            LLVMGenerator.mult_i64(v1.name, v2.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT64));
+         }
          if (v1.type == VarType.REAL) {
             LLVMGenerator.mult_double(v1.name, v2.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
@@ -130,6 +154,10 @@ public class LLVMActions extends LangXBaseListener {
          if (v1.type == VarType.INT) {
             LLVMGenerator.div_i32(v2.name, v1.name);
             stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+         }
+         if (v1.type == VarType.INT64) {
+            LLVMGenerator.div_i64(v2.name, v1.name);
+            stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT64));
          }
          if (v1.type == VarType.REAL) {
             LLVMGenerator.div_double(v2.name, v1.name);
@@ -162,6 +190,9 @@ public class LLVMActions extends LangXBaseListener {
          if (type == VarType.INT) {
             LLVMGenerator.printf_i32(ID);
          }
+         if (type == VarType.INT64) {
+            LLVMGenerator.printf_i64(ID);
+         }
          if (type == VarType.REAL) {
             LLVMGenerator.printf_double(ID);
          }
@@ -176,6 +207,8 @@ public class LLVMActions extends LangXBaseListener {
       VarType type = variables.get(ID);
       if (type == VarType.INT) {
          LLVMGenerator.scanf_i32(ID);
+      } else if (type == VarType.INT64) {
+         LLVMGenerator.scanf_i64(ID);
       } else {
          LLVMGenerator.scanf_double(ID);
       }

@@ -3,7 +3,7 @@
 
 ANTLR=antlr-4.13.2-complete.jar
 
-all: generate compile test
+all: clean generate compile test
 
 generate:
 	java -jar $(ANTLR) -o output LangX.g4

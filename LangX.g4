@@ -26,13 +26,16 @@ expr3: expr4           #single3
     ;
 
 expr4:   INT			#int
+       | INT64          #int64
        | REAL			#real
        | TOINT expr4		#toint
+       | TOINT64 expr4		#toint64
        | TOREAL expr4		#toreal
        | '(' expr0 ')'		#par
     ;
 
 type:   'int'
+       | 'int64'
        | 'real'
     ;
 
@@ -45,6 +48,9 @@ READ:	'read'
 TOINT: '(int)'
     ;
 
+TOINT64: '(int64)'
+    ;
+
 TOREAL: '(real)'
     ;
 
@@ -55,6 +61,9 @@ REAL: '0'..'9'+'.''0'..'9'+
     ;
 
 INT: '0'..'9'+
+    ;
+
+INT64: ('0'..'9')+ 'l'
     ;
 
 ADD: '+'
