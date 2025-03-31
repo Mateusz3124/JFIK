@@ -1,3 +1,9 @@
+u : int64
+y : real
+u = (int64) 3.2
+y = (real) 230l
+print u
+print y
 x : int
 read x
 print x

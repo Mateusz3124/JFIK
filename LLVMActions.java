@@ -171,15 +171,37 @@ public class LLVMActions extends LangXBaseListener {
    @Override
    public void exitToint(LangXParser.TointContext ctx) {
       Value v = stack.pop();
-      LLVMGenerator.fptosi(v.name);
-      stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+      if (v.type == VarType.REAL) {
+         LLVMGenerator.fptosi(v.name);
+         stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+      } else if (v.type == VarType.INT64) {
+         LLVMGenerator.sext64(v.name);
+         stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT));
+      }
+   }
+
+   @Override
+   public void exitToint64(LangXParser.Toint64Context ctx) {
+      Value v = stack.pop();
+      if (v.type == VarType.REAL) {
+         LLVMGenerator.fptosi64(v.name);
+         stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT64));
+      } else if (v.type == VarType.INT) {
+         LLVMGenerator.sext(v.name);
+         stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.INT64));
+      }
    }
 
    @Override
    public void exitToreal(LangXParser.TorealContext ctx) {
       Value v = stack.pop();
-      LLVMGenerator.sitofp(v.name);
-      stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
+      if (v.type == VarType.INT) {
+         LLVMGenerator.sitofp(v.name);
+         stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
+      } else if (v.type == VarType.INT64) {
+         LLVMGenerator.si64tofp(v.name);
+         stack.push(new Value("%" + (LLVMGenerator.reg - 1), VarType.REAL));
+      }
    }
 
    @Override
