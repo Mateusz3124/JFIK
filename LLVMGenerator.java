@@ -277,6 +277,7 @@ class LLVMGenerator {
       text += "declare i32 @__isoc99_scanf(i8*, ...)\n";
       text += "@strpi = constant [4 x i8] c\"%d\\0A\\00\"\n";
       text += "@strpil = constant [5 x i8] c\"%ld\\0A\\00\"\n";
+      text += "@strpf = constant [4 x i8] c\"%f\\0A\\00\"\n";
       text += "@strpd = constant [4 x i8] c\"%f\\0A\\00\"\n";
       text += "@strsi = constant [3 x i8] c\"%d\\00\"\n";
       text += "@strsil = constant [4 x i8] c\"%ld\\00\"\n";

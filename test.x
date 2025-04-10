@@ -1,3 +1,9 @@
+we : float32
+
+we = 21.0f
+
+print we
+
 u : int64
 y : real
 

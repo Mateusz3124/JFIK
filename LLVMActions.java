@@ -71,6 +71,9 @@ public class LLVMActions extends LangXBaseListener {
          } else if (type == VarType.INT && v.type == VarType.REAL) {
             v = castToInt(v);
          } else {
+		if(type == null) {
+		error(ctx.getStart().getLine(), "Value not initialized");
+		}
             error(ctx.getStart().getLine(), "Incompatible types: expected " + type + ", got " + v.type);
             return;
          }
@@ -209,15 +212,16 @@ public class LLVMActions extends LangXBaseListener {
       String input = v.name;
 
       // If it's not already a register (e.g., a constant), lift it to a real value first
-      if (!input.startsWith("%")) {
-         String constReg = "%" + LLVMGenerator.reg++;
-         if (input.matches("^-?\\d+$")) {  // If it's an integer constant
-            LLVMGenerator.main_text += constReg + " = sitofp i64 " + input + " to double\n"; // Cast integer to real
-         } else {  // If it's already a floating-point number
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert floating-point to double
-         }
-         input = constReg;
-      }
+      //if (!input.startsWith("%")) {
+       //  String constReg = "%" + LLVMGenerator.reg++;
+        // if (input.matches("^-?\\d+$")) {  // If it's an integer constant
+         //   LLVMGenerator.main_text += constReg + " = sitofp i64 " + input + " to double\n"; // Cast integer to real
+         //} else {  // If it's already a floating-point number
+          //  LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert floating-point to double
+         //}
+         //input = constReg;
+	 //return new Value(constReg, VarType.REAL);
+      //}
 
       String result = "%" + LLVMGenerator.reg++;
       LLVMGenerator.main_text += result + " = sitofp i64 " + input + " to double\n";  // Correct cast for integer to floating-point
@@ -228,15 +232,16 @@ public class LLVMActions extends LangXBaseListener {
       String input = v.name;
 
       // If it's not already a register, convert it to real first
-      if (!input.startsWith("%")) {
-         String constReg = "%" + LLVMGenerator.reg++;
-         if (input.matches("^-?\\d+$")) {  // If it's an integer constant
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat integer as real (double)
-         } else {  // If it's already a floating-point number
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
-         }
-         input = constReg;
-      }
+      //if (!input.startsWith("%")) {
+        // String constReg = "%" + LLVMGenerator.reg++;
+        // if (input.matches("^-?\\d+$")) {  // If it's an integer constant
+         //   LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat integer as real (double)
+         ///} else {  // If it's already a floating-point number
+           /// LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
+        // }
+         //input = constReg;
+	   //     return new Value(constReg, VarType.INT64);
+//      }
 
       String result = "%" + LLVMGenerator.reg++;
       LLVMGenerator.main_text += result + " = fptosi double " + input + " to i64\n";  // Cast floating-point to integer
@@ -247,15 +252,16 @@ public class LLVMActions extends LangXBaseListener {
       String input = v.name;
 
       // If it's a constant, convert it to a real and then cast it to float32
-      if (!input.startsWith("%")) {
-         String constReg = "%" + LLVMGenerator.reg++;
-         if (input.matches("^-?\\d+$")) { // If it's an integer constant
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat as real (double)
-         } else {  // If it's already a floating point number
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
-         }
-         input = constReg;
-      }
+//      if (!input.startsWith("%")) {
+  //       String constReg = "%" + LLVMGenerator.reg++;
+    //     if (input.matches("^-?\\d+$")) { // If it's an integer constant
+      //      LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat as real (double)
+       //  } else {  // If it's already a floating point number
+        //    LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
+        // }
+         //input = constReg;
+	  //      return new Value(constReg, VarType.FLOAT32);
+      //}
 
       String result = "%" + LLVMGenerator.reg++;
       LLVMGenerator.main_text += result + " = fptosi double " + input + " to float\n"; // Convert REAL to FLOAT32
@@ -266,15 +272,16 @@ public class LLVMActions extends LangXBaseListener {
       String input = v.name;
 
       // If it's a constant, convert it to a real and then cast it to float64
-      if (!input.startsWith("%")) {
-         String constReg = "%" + LLVMGenerator.reg++;
-         if (input.matches("^-?\\d+$")) { // If it's an integer constant
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat integer as real (double)
-         } else {  // If it's already a floating point number
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
-         }
-         input = constReg;
-      }
+      //if (!input.startsWith("%")) {
+        // String constReg = "%" + LLVMGenerator.reg++;
+         //if (input.matches("^-?\\d+$")) { // If it's an integer constant
+          //  LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat integer as real (double)
+         //} else {  // If it's already a floating point number
+          //  LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
+         //}
+         //input = constReg;
+	  //      return new Value(constReg, VarType.FLOAT64);
+      //}
 
       String result = "%" + LLVMGenerator.reg++;
       LLVMGenerator.main_text += result + " = fptosi double " + input + " to double\n"; // Convert REAL to FLOAT64
@@ -285,15 +292,16 @@ public class LLVMActions extends LangXBaseListener {
       String input = v.name;
 
       // If it's a constant, convert it to a real and then cast it to int
-      if (!input.startsWith("%")) {
-         String constReg = "%" + LLVMGenerator.reg++;
-         if (input.matches("^-?\\d+$")) { // If it's an integer constant
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat integer as real (double)
-         } else {  // If it's already a floating point number
-            LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
-         }
-         input = constReg;
-      }
+     // if (!input.startsWith("%")) {
+        // String constReg = "%" + LLVMGenerator.reg++;
+        // if (input.matches("^-?\\d+$")) { // If it's an integer constant
+           // LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + ".0\n"; // Treat integer as real (double)
+         //} else {  // If it's already a floating point number
+          //  LLVMGenerator.main_text += constReg + " = fadd double 0.0, " + input + "\n"; // Convert to double
+         //}
+         //input = constReg;
+	//        return new Value(constReg, VarType.INT);
+      //}
 
       String result = "%" + LLVMGenerator.reg++;
       LLVMGenerator.main_text += result + " = fptosi double " + input + " to i32\n"; // Convert REAL to INT (i32)
