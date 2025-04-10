@@ -1,20 +1,27 @@
 u : int64
 y : real
+
 u = (int64) 3.2
 y = (real) 230l
+
 print u
 print y
+
 x : int
 read x
 print x
+
 z : real
 z = 2.3 + 4.2
 print z
+
 z = 3.2 - 1.2
 print z
+
 z = 10.0 / 2.0
 print z
-z = 2.0 + 4.0 * (real)2
+
+z = 2.0 + 4.0 *  2.0
 print z
 
 h : int64
