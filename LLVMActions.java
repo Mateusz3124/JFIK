@@ -4,16 +4,23 @@ import java.util.Stack;
 import org.antlr.v4.runtime.ParserRuleContext;
 
 enum VarType {
-   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN
+   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN, ANY
 }
 
 class Value {
    public String name;
    public VarType type;
+   public boolean isAny = false;
 
    public Value(String name, VarType type) {
       this.name = name;
       this.type = type;
+   }
+
+   public Value(String name, VarType type, boolean isAny) {
+      this.name = name;
+      this.type = type;
+      this.isAny = isAny;
    }
 
    @Override
@@ -88,8 +95,29 @@ class Variables {
       }
    }
 
+   public void putAny(String id, VarType type) {
+      switch (scope) {
+         case VariableScope.main:
+            mainVariables.put(id, new Value(("%" + id), type, true));
+            break;
+
+         case VariableScope.function:
+            functionVariables.put(id, new Value(("%" + id), type, true));
+            break;
+
+         default:
+            System.err.println("Scope is incorrect" + scope);
+            System.exit(1);
+      }
+   }
+
    public String load(Value val) {
-      int currReg = LLVMGenerator.load(val.name, typesString[val.type.ordinal()]);
+      String currId = val.name;
+      if (val.isAny) {
+         int anyReg = LLVMGenerator.loadAny(val.name);
+         currId = "%" + String.valueOf(anyReg);
+      }
+      int currReg = LLVMGenerator.load(currId, typesString[val.type.ordinal()]);
       return "%" + String.valueOf(currReg);
    }
 
@@ -129,6 +157,12 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID().getText();
       String type = ctx.type().getText();
 
+      if (type.equals("any")) {
+         variables.putAny(ID, VarType.ANY);
+         LLVMGenerator.declare(ID, "ptr");
+         return;
+      }
+
       int i = findIdx(type);
       variables.put(ID, VarType.values()[i]);
       LLVMGenerator.declare(ID, typesString[i]);
@@ -139,10 +173,18 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID().getText();
       String type = ctx.type().getText();
 
+      Value val = stack.pop();
       int i = findIdx(type);
+
+      if (type.equals("any")) {
+         variables.putAny(ID, val.type);
+         LLVMGenerator.declare(ID, "ptr");
+         LLVMGenerator.assignAny("%" + ID, typesString[val.type.ordinal()], val.name, 4);
+         return;
+      }
+
       LLVMGenerator.declare(ID, typesString[i]);
 
-      Value val = stack.pop();
       variables.put(ID, VarType.values()[i]);
       Value variable = variables.get(ID, ctx);
       LLVMGenerator.assign(variable.name, val.name, typesString[i]);
@@ -152,6 +194,10 @@ public class LLVMActions extends LangXBaseListener {
    public void exitAssignTypeGlobal(LangXParser.AssignTypeGlobalContext ctx) {
       String ID = ctx.ID().getText();
       String type = ctx.type().getText();
+
+      if (type.equals("any")) {
+         error(ctx.getStart().getLine(), "Global can't be any");
+      }
 
       int i = findIdx(type);
       VariableScope curr = variables.scope;
@@ -168,6 +214,10 @@ public class LLVMActions extends LangXBaseListener {
    public void exitAssignTypedGlobal(LangXParser.AssignTypedGlobalContext ctx) {
       String ID = ctx.ID().getText();
       String type = ctx.type().getText();
+
+      if (type.equals("any")) {
+         error(ctx.getStart().getLine(), "Global can't be any");
+      }
 
       int i = findIdx(type);
 
@@ -186,10 +236,24 @@ public class LLVMActions extends LangXBaseListener {
       Value v = stack.pop();
       Value val = variables.get(ID, ctx);
 
+      if (val.isAny) {
+         if (val.type != VarType.ANY) {
+            LLVMGenerator.free(val.name);
+         }
+         int typeSize = 4;
+         if (val.type == VarType.REAL || val.type == VarType.FLOAT64) {
+            typeSize = 8;
+         }
+         LLVMGenerator.assignAny(val.name, typesString[v.type.ordinal()], v.name, typeSize);
+         variables.putAny(ID, v.type);
+         return;
+      }
+
       if (val.type != v.type) {
          error(ctx.getStart().getLine(), "Incompatible types: expected " + val.type + ", got " + v.type);
          return;
       }
+
       LLVMGenerator.assign(val.name, v.name, typesString[v.type.ordinal()]);
    }
 
@@ -306,6 +370,7 @@ public class LLVMActions extends LangXBaseListener {
    public void exitPrint(LangXParser.PrintContext ctx) {
       String ID = ctx.ID().getText();
       Value val = variables.get(ID, ctx);
+      variables.load(val);
       switch (val.type) {
          case INT:
             LLVMGenerator.printf_i32(val.name);

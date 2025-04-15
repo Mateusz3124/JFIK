@@ -23,7 +23,7 @@ stat:   ID ':' type                     #assignType
       | READ ID                         #read
       | ID '(' ')'    				          #callSingle
       | IF equal '{' blockif '}'	      #if
-      | 'for' expr0 '{' blockfor '}' #for
+      | 'for' expr0 '{' blockfor '}'    #for
     ;
 
 blockif: ( stat? NEWLINE )* 
@@ -75,6 +75,7 @@ type:   'int'
       | 'real'
       | 'float32'
       | 'float64'
+      | 'any'
     ;
 
 funcType:   'int'

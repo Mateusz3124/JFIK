@@ -11,8 +11,6 @@ class LLVMGenerator {
    static Stack<Integer> brstack = new Stack<Integer>();
 
    public static void printf_i32(String id) {
-      buffer += "%" + reg + " = load i32, i32* " + id + "\n";
-      reg++;
       buffer += "%" + reg
             + " = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @strpi, i32 0, i32 0), i32 %"
             + (reg - 1) + ")\n";
@@ -20,8 +18,6 @@ class LLVMGenerator {
    }
 
    public static void printf_i64(String id) {
-      buffer += "%" + reg + " = load i64, i64* " + id + "\n";
-      reg++;
       buffer += "%" + reg
             + " = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @strpil, i32 0, i32 0), i64 %"
             + (reg - 1) + ")\n";
@@ -29,8 +25,6 @@ class LLVMGenerator {
    }
 
    public static void printf_double(String id) {
-      buffer += "%" + reg + " = load double, double* " + id + "\n";
-      reg++;
       buffer += "%" + reg
             + " = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @strpd, i32 0, i32 0), double %"
             + (reg - 1) + ")\n";
@@ -42,8 +36,6 @@ class LLVMGenerator {
    }
 
    public static void printf_float32(String id) {
-      buffer += "%" + reg + " = load float, float* " + id + "\n";
-      reg++;
       buffer += "%" + reg + " = fpext float %" + (reg - 1) + " to double\n"; // convert to double for printf
       reg++;
       buffer += "%" + reg
@@ -92,12 +84,33 @@ class LLVMGenerator {
       header_text += "@" + id + " = global " + type + " " + defaultVal + "\n";
    }
 
+   public static void assignAny(String id, String type, String val, int typeSize) {
+      buffer += "%" + reg + "= call ptr @malloc(i64 " + String.valueOf(typeSize) + ")" + "\n";
+      buffer += "store ptr %" + reg + ", ptr " + id + "\n";
+      reg++;
+      buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
+      buffer += "store " + type + " " + val + ", ptr %" + reg + "\n";
+      reg++;
+   }
+
    public static void assign(String id, String value, String type) {
       buffer += "store " + type + " " + value + ", " + type + "* " + id + "\n";
    }
 
+   public static void free(String id) {
+      buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
+      buffer += "call void @free(ptr noundef %" + reg + ")\n";
+      reg++;
+   }
+
    public static int load(String id, String type) {
       buffer += "%" + reg + " = load " + type + ", " + type + "* " + id + "\n";
+      reg++;
+      return reg - 1;
+   }
+
+   public static int loadAny(String id) {
+      buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
       reg++;
       return reg - 1;
    }
@@ -349,6 +362,8 @@ class LLVMGenerator {
       text += "define i32 @main() nounwind{\n";
       text += main_text;
       text += "ret i32 0 }\n";
+      text += "declare ptr @malloc(i64)\n";
+      text += "declare void @free(ptr noundef)\n";
       return text;
    }
 

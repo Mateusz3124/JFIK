@@ -1,8 +1,7 @@
-#include<stdlib.h>
+#include <stdlib.h>
 #include <stdio.h>
 int main()
 {
-    int *x = (int *)malloc(sizeof(int));
-    *x = 4;
-    printf("%d", *x);
+    float x = 4.0f;
+    printf("%f\n", x);
 }

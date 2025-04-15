@@ -22,7 +22,9 @@ fun see : void {
 fun loop : void {
   x : int = 1
   for 1 + x {
+    for 1 + x {
       print x
+    }
   }
 }
 
@@ -32,3 +34,9 @@ print zet
 print z
 see()
 loop()
+
+x : any = 4
+print x
+x = 4.0f
+print x
+
