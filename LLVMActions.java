@@ -1,16 +1,21 @@
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Stack;
+import java.util.stream.IntStream;
+
 import org.antlr.v4.runtime.ParserRuleContext;
 
 enum VarType {
-   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN, ANY
+   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN, ANY, STRUCT
 }
 
 class Value {
    public String name;
    public VarType type;
-   public boolean isAny = false;
+   public boolean isMalloc = false;
+   public String structID = null;
 
    public Value(String name, VarType type) {
       this.name = name;
@@ -20,12 +25,17 @@ class Value {
    public Value(String name, VarType type, boolean isAny) {
       this.name = name;
       this.type = type;
-      this.isAny = isAny;
+      this.isMalloc = isAny;
    }
 
    @Override
    public int hashCode() {
       return name.hashCode();
+   }
+
+   @Override
+   public boolean equals(Object obj) {
+      return obj.equals(this.name);
    }
 
 }
@@ -95,7 +105,7 @@ class Variables {
       }
    }
 
-   public void putAny(String id, VarType type) {
+   public void putMalloc(String id, VarType type) {
       switch (scope) {
          case VariableScope.main:
             mainVariables.put(id, new Value(("%" + id), type, true));
@@ -113,7 +123,7 @@ class Variables {
 
    public String load(Value val) {
       String currId = val.name;
-      if (val.isAny) {
+      if (val.isMalloc) {
          int anyReg = LLVMGenerator.loadAny(val.name);
          currId = "%" + String.valueOf(anyReg);
       }
@@ -132,7 +142,9 @@ public class LLVMActions extends LangXBaseListener {
 
    Variables variables = new Variables();
    HashMap<String, VarType> functions = new HashMap<>();
+   HashMap<String, ArrayList<Value>> structures = new HashMap<>();
    Stack<Value> stack = new Stack<>();
+   Stack<Value> structValues = new Stack<>();
    boolean isReturn = false;
    Value function;
 
@@ -143,7 +155,7 @@ public class LLVMActions extends LangXBaseListener {
 
    String[] typesStringLang = new String[] { "int", "int64", "real", "float32", "float64" };
 
-   public int findIdx(String value) {
+   public int findTypeIdx(String value) {
       for (int i = 0; i < typesStringLang.length; i++) {
          if (typesStringLang[i].equals(value)) {
             return i;
@@ -158,14 +170,52 @@ public class LLVMActions extends LangXBaseListener {
       String type = ctx.type().getText();
 
       if (type.equals("any")) {
-         variables.putAny(ID, VarType.ANY);
+         variables.putMalloc(ID, VarType.ANY);
          LLVMGenerator.declare(ID, "ptr");
          return;
       }
 
-      int i = findIdx(type);
+      if (type.equals("struct")) {
+         variables.putMalloc(ID, VarType.STRUCT);
+         LLVMGenerator.declare(ID, "ptr");
+         return;
+      }
+
+      int i = findTypeIdx(type);
       variables.put(ID, VarType.values()[i]);
       LLVMGenerator.declare(ID, typesString[i]);
+   }
+
+   private void initStructMalloc(String id, String idTarget) {
+      ArrayList<Value> list = structures.get(idTarget);
+      int typeSize = 4;
+      for (Value val : list) {
+         if (val.type == VarType.FLOAT64 || val.type == VarType.FLOAT32) {
+            typeSize = 8;
+         }
+      }
+      LLVMGenerator.malloc(id, typeSize * list.size());
+      return;
+   }
+
+   @Override
+   public void exitAssignStruct(LangXParser.AssignStructContext ctx) {
+      String ID = ctx.ID(0).getText();
+      String IDTARGET = ctx.ID(1).getText();
+      Value id = variables.get(ID, ctx);
+      id.structID = IDTARGET;
+      initStructMalloc(id.name, IDTARGET);
+   }
+
+   @Override
+   public void exitAssignTypedStruct(LangXParser.AssignTypedStructContext ctx) {
+      String ID = ctx.ID(0).getText();
+      String IDTARGET = ctx.ID(1).getText();
+      variables.putMalloc(ID, VarType.STRUCT);
+      Value val = variables.get(ID, ctx);
+      val.structID = IDTARGET;
+      LLVMGenerator.declare(ID, "ptr");
+      initStructMalloc("%" + ID, IDTARGET);
    }
 
    @Override
@@ -174,12 +224,16 @@ public class LLVMActions extends LangXBaseListener {
       String type = ctx.type().getText();
 
       Value val = stack.pop();
-      int i = findIdx(type);
+      int i = findTypeIdx(type);
 
       if (type.equals("any")) {
-         variables.putAny(ID, val.type);
+         variables.putMalloc(ID, val.type);
          LLVMGenerator.declare(ID, "ptr");
-         LLVMGenerator.assignAny("%" + ID, typesString[val.type.ordinal()], val.name, 4);
+         int typeSize = 4;
+         if (val.type == VarType.REAL || val.type == VarType.FLOAT64) {
+            typeSize = 8;
+         }
+         LLVMGenerator.assignAny("%" + ID, typesString[val.type.ordinal()], val.name, typeSize);
          return;
       }
 
@@ -199,7 +253,7 @@ public class LLVMActions extends LangXBaseListener {
          error(ctx.getStart().getLine(), "Global can't be any");
       }
 
-      int i = findIdx(type);
+      int i = findTypeIdx(type);
       VariableScope curr = variables.scope;
       variables.scope = VariableScope.global;
       variables.put(ID, VarType.values()[i]);
@@ -219,7 +273,7 @@ public class LLVMActions extends LangXBaseListener {
          error(ctx.getStart().getLine(), "Global can't be any");
       }
 
-      int i = findIdx(type);
+      int i = findTypeIdx(type);
 
       Value val = stack.pop();
       LLVMGenerator.declareGlobal(ID, typesString[i], val.name);
@@ -236,7 +290,7 @@ public class LLVMActions extends LangXBaseListener {
       Value v = stack.pop();
       Value val = variables.get(ID, ctx);
 
-      if (val.isAny) {
+      if (val.isMalloc) {
          if (val.type != VarType.ANY) {
             LLVMGenerator.free(val.name);
          }
@@ -245,7 +299,7 @@ public class LLVMActions extends LangXBaseListener {
             typeSize = 8;
          }
          LLVMGenerator.assignAny(val.name, typesString[v.type.ordinal()], v.name, typeSize);
-         variables.putAny(ID, v.type);
+         variables.putMalloc(ID, v.type);
          return;
       }
 
@@ -258,7 +312,44 @@ public class LLVMActions extends LangXBaseListener {
    }
 
    @Override
+   public void exitAssignStructKey(LangXParser.AssignStructKeyContext ctx) {
+      String ID = ctx.ID(0).getText();
+      String KEY = ctx.ID(1).getText();
+      Value v = stack.pop();
+      Value val = variables.get(ID, ctx);
+      ArrayList<Value> list = structures.get(val.structID);
+
+      int index = IntStream.range(0, list.size())
+            .filter(i -> KEY.equals(list.get(i).name))
+            .findFirst()
+            .orElse(-1);
+
+      int id = LLVMGenerator.loadStruct(ID, val.structID, index);
+      LLVMGenerator.assignStruct(typesString[list.get(index).type.ordinal()], v.name, String.valueOf(id));
+   }
+
+   public void exitStructValue(LangXParser.StructValueContext ctx) {
+      String ID = ctx.ID(0).getText();
+      String KEY = ctx.ID(1).getText();
+
+      Value val = variables.get(ID, ctx);
+      ArrayList<Value> list = structures.get(val.structID);
+
+      int index = IntStream.range(0, list.size())
+            .filter(i -> KEY.equals(list.get(i).name))
+            .findFirst()
+            .orElse(-1);
+
+      int id = LLVMGenerator.loadStruct(ID, val.structID, index);
+      VarType type = list.get(index).type;
+      int idCorrectType = LLVMGenerator.loadPtrToType("%" + id, typesString[type.ordinal()]);
+      Value newVal = new Value("%" + idCorrectType, type);
+      stack.push(newVal);
+   }
+
+   @Override
    public void exitProg(LangXParser.ProgContext ctx) {
+      LLVMGenerator.freeAtEnd();
       LLVMGenerator.close_main();
       System.out.println(LLVMGenerator.generate());
    }
@@ -371,6 +462,44 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID().getText();
       Value val = variables.get(ID, ctx);
       variables.load(val);
+      switch (val.type) {
+         case INT:
+            LLVMGenerator.printf_i32(val.name);
+            break;
+         case INT64:
+            LLVMGenerator.printf_i64(val.name);
+            break;
+         case REAL:
+            LLVMGenerator.printf_double(val.name);
+            break;
+         case FLOAT32:
+            LLVMGenerator.printf_float32(val.name);
+            break;
+         case FLOAT64:
+            LLVMGenerator.printf_float64(val.name);
+            break;
+         default:
+            error(ctx.getStart().getLine(), "unknown variable " + ID);
+      }
+   }
+
+   public void exitPrintStruct(LangXParser.PrintStructContext ctx) {
+      String ID = ctx.ID(0).getText();
+      String KEY = ctx.ID(1).getText();
+
+      Value variable = variables.get(ID, ctx);
+      ArrayList<Value> list = structures.get(variable.structID);
+
+      int index = IntStream.range(0, list.size())
+            .filter(i -> KEY.equals(list.get(i).name))
+            .findFirst()
+            .orElse(-1);
+
+      int id = LLVMGenerator.loadStruct(ID, variable.structID, index);
+      VarType type = list.get(index).type;
+      int idCorrectType = LLVMGenerator.loadPtrToType("%" + id, typesString[type.ordinal()]);
+      Value val = new Value("%" + idCorrectType, type);
+
       switch (val.type) {
          case INT:
             LLVMGenerator.printf_i32(val.name);
@@ -512,6 +641,33 @@ public class LLVMActions extends LangXBaseListener {
    @Override
    public void exitBlockfor(LangXParser.BlockforContext ctx) {
       LLVMGenerator.repeatend();
+   }
+
+   @Override
+   public void exitStructVal(LangXParser.StructValContext ctx) {
+
+      String ID = ctx.ID().getText();
+      String type = ctx.type().getText();
+      int i = findTypeIdx(type);
+      Value val = new Value(ID, VarType.values()[i]);
+      structValues.add(val);
+   }
+
+   @Override
+   public void exitStruct(LangXParser.StructContext ctx) {
+      String ID = ctx.ID().getText();
+      String values = "";
+      for (Value val : structValues) {
+         values += typesString[val.type.ordinal()] + ", ";
+      }
+      String trimmed = values.substring(0, values.length() - 2);
+      LLVMGenerator.structInit(ID, trimmed);
+      ArrayList<Value> list = new ArrayList<>();
+      for (Value v : structValues) {
+         list.add(v);
+      }
+      structures.put(ID, list);
+      structValues.clear();
    }
 
 }

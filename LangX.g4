@@ -1,6 +1,15 @@
 grammar LangX;
 
-prog: ( (stat|function)? NEWLINE )* ;
+prog: ( (stat|function|struct)? NEWLINE )* ;
+
+struct: 'struct' ID structBlock
+;
+
+structBlock: '{' (structVal? NEWLINE)* '}'
+;
+
+structVal: ID ':' type
+;
 
 function: FUNCTION fparam fblock ENDFUNCTION
 ;
@@ -15,11 +24,15 @@ return: 'return' expr0 NEWLINE
 ;
 
 stat:   ID ':' type                     #assignType
+      | ID'.'ID '=' expr0               #assignStructKey
+      | ID '=' 'struct' ID              #assignStruct
+      | ID ':' 'struct' '=' 'struct' ID #assignTypedStruct
       | ID ':' type '=' expr0           #assignTyped
       | 'global' ID ':' type            #assignTypeGlobal
       | 'global' ID ':' type '=' expr0  #assignTypedGlobal
       | ID '=' expr0                    #assign
       | PRINT ID                        #print
+      | PRINT ID.ID                     #printStruct
       | READ ID                         #read
       | ID '(' ')'    				          #callSingle
       | IF equal '{' blockif '}'	      #if
@@ -38,7 +51,7 @@ IF:	'if'
 equal: '(' expr0 '==' expr0 ')'
 ;
 
-expr0:  expr1                           #single0
+expr0:  expr1                          #single0
       | expr0 ADD expr1                #add
     ;
 
@@ -68,6 +81,7 @@ expr4:   INT                           #int
        | TOFLOAT64 expr4               #tofloat64
        | '(' expr0 ')'                 #par
        | ID '(' ')'    				         #call
+       | ID'.'ID         				       #structValue
     ;
 
 type:   'int'
@@ -76,6 +90,7 @@ type:   'int'
       | 'float32'
       | 'float64'
       | 'any'
+      | 'struct'
     ;
 
 funcType:   'int'

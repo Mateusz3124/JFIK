@@ -1,3 +1,6 @@
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Stack;
 
 class LLVMGenerator {
@@ -5,6 +8,7 @@ class LLVMGenerator {
    public static int reg = 1;
    public static String header_text = "";
    public static String main_text = "";
+   public static Set<String> free_text = new HashSet<String>();
    public static int main_tmp = 1;
    public static String buffer = "";
    static int br = 0;
@@ -84,13 +88,22 @@ class LLVMGenerator {
       header_text += "@" + id + " = global " + type + " " + defaultVal + "\n";
    }
 
-   public static void assignAny(String id, String type, String val, int typeSize) {
+   public static void malloc(String id, int typeSize) {
       buffer += "%" + reg + "= call ptr @malloc(i64 " + String.valueOf(typeSize) + ")" + "\n";
       buffer += "store ptr %" + reg + ", ptr " + id + "\n";
       reg++;
+   }
+
+   public static void assignAny(String id, String type, String val, int typeSize) {
+      malloc(id, typeSize);
       buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
       buffer += "store " + type + " " + val + ", ptr %" + reg + "\n";
       reg++;
+      free_text.add(id);
+   }
+
+   public static void assignStruct(String type, String val, String id) {
+      buffer += "store " + type + " " + val + ", ptr %" + id + "\n";
    }
 
    public static void assign(String id, String value, String type) {
@@ -103,6 +116,12 @@ class LLVMGenerator {
       reg++;
    }
 
+   public static void freeAtEnd() {
+      for (String val : free_text) {
+         free(val);
+      }
+   }
+
    public static int load(String id, String type) {
       buffer += "%" + reg + " = load " + type + ", " + type + "* " + id + "\n";
       reg++;
@@ -111,6 +130,21 @@ class LLVMGenerator {
 
    public static int loadAny(String id) {
       buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
+      reg++;
+      return reg - 1;
+   }
+
+   public static int loadPtrToType(String id, String type) {
+      buffer += "%" + reg + " = load " + type + ", ptr " + id + "\n";
+      reg++;
+      return reg - 1;
+   }
+
+   public static int loadStruct(String id, String struct, int keyIdx) {
+      buffer += "%" + reg + " = load ptr, ptr %" + id + "\n";
+      reg++;
+      buffer += "%" + reg + " = getelementptr inbounds %struct." + struct + ", ptr %" + (reg - 1) + ", i32 0, i32 "
+            + keyIdx + "\n";
       reg++;
       return reg - 1;
    }
@@ -341,6 +375,10 @@ class LLVMGenerator {
       int b = brstack.pop();
       buffer += "br label %cond" + b + "\n";
       buffer += "false" + b + ":\n";
+   }
+
+   public static void structInit(String id, String values) {
+      header_text += "%struct." + id + " = type { " + values + " }\n";
    }
 
    public static void close_main() {
