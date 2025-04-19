@@ -103,7 +103,7 @@ class LLVMGenerator {
    }
 
    public static void assignStruct(String type, String val, String id) {
-      buffer += "store " + type + " " + val + ", ptr %" + id + "\n";
+      buffer += "store " + type + " " + val + ", ptr " + id + "\n";
    }
 
    public static void assign(String id, String value, String type) {
@@ -128,7 +128,7 @@ class LLVMGenerator {
       return reg - 1;
    }
 
-   public static int loadAny(String id) {
+   public static int loadPtr(String id) {
       buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
       reg++;
       return reg - 1;
@@ -141,7 +141,7 @@ class LLVMGenerator {
    }
 
    public static int loadStruct(String id, String struct, int keyIdx) {
-      buffer += "%" + reg + " = load ptr, ptr %" + id + "\n";
+      buffer += "%" + reg + " = load ptr, ptr " + id + "\n";
       reg++;
       buffer += "%" + reg + " = getelementptr inbounds %struct." + struct + ", ptr %" + (reg - 1) + ", i32 0, i32 "
             + keyIdx + "\n";

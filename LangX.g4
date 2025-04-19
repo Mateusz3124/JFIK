@@ -31,8 +31,7 @@ stat:   ID ':' type                     #assignType
       | 'global' ID ':' type            #assignTypeGlobal
       | 'global' ID ':' type '=' expr0  #assignTypedGlobal
       | ID '=' expr0                    #assign
-      | PRINT ID                        #print
-      | PRINT ID.ID                     #printStruct
+      | PRINT expr0                             #print
       | READ ID                         #read
       | ID '(' ')'    				          #callSingle
       | IF equal '{' blockif '}'	      #if
@@ -73,16 +72,19 @@ expr4:   INT                           #int
        | REAL                          #real
        | FLOAT32                       #float32
        | FLOAT64                       #float64
-       | ID                            #idStat
+       | valueOfID                     #valueof
        | TOINT expr4                   #toint
        | TOINT64 expr4                 #toint64
        | TOREAL expr4                  #toreal
        | TOFLOAT32 expr4               #tofloat32
        | TOFLOAT64 expr4               #tofloat64
        | '(' expr0 ')'                 #par
-       | ID '(' ')'    				         #call
-       | ID'.'ID         				       #structValue
+       | ID '(' ')'    		         #call
     ;
+
+valueOfID: ID                         #idStat
+      | ID'.'ID                       #structValue 
+;
 
 type:   'int'
       | 'int64'

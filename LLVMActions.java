@@ -45,10 +45,9 @@ enum VariableScope {
 }
 
 class Variables {
-   String[] typesString = new String[] { "i32", "i64", "double", "float", "double" };
-   HashMap<String, Value> mainVariables = new HashMap<>();
-   HashMap<String, Value> functionVariables = new HashMap<>();
-   HashMap<String, Value> globalVariables = new HashMap<>();
+   HashMap<String, VariableI> mainVariables = new HashMap<>();
+   HashMap<String, VariableI> functionVariables = new HashMap<>();
+   HashMap<String, VariableI> globalVariables = new HashMap<>();
    VariableScope scope = VariableScope.main;
 
    void error(int line, String msg) {
@@ -56,8 +55,8 @@ class Variables {
       System.exit(1);
    }
 
-   public Value get(String id, ParserRuleContext ctx) {
-      Value val = null;
+   public VariableI get(String id, ParserRuleContext ctx) {
+      VariableI val = null;
       switch (scope) {
          case VariableScope.main:
             if (!mainVariables.containsKey(id)) {
@@ -85,50 +84,32 @@ class Variables {
       return val;
    }
 
-   public void put(String id, VarType type) {
+   public void put(VariableI variable) {
+      Value val = variable.getValue();
+      String temp = val.name;
       switch (scope) {
          case VariableScope.main:
-            mainVariables.put(id, new Value(("%" + id), type));
+            val.name = "%" + val.name;
+            variable.setValue(val);
+            mainVariables.put(temp, variable);
             break;
 
          case VariableScope.function:
-            functionVariables.put(id, new Value(("%" + id), type));
+            val.name = "%" + val.name;
+            variable.setValue(val);
+            functionVariables.put(temp, variable);
             break;
 
          case VariableScope.global:
-            globalVariables.put(id, new Value(("@" + id), type));
+            val.name = "@" + val.name;
+            variable.setValue(val);
+            globalVariables.put(temp, variable);
             break;
 
          default:
             System.err.println("Scope is incorrect" + scope);
             System.exit(1);
       }
-   }
-
-   public void putMalloc(String id, VarType type) {
-      switch (scope) {
-         case VariableScope.main:
-            mainVariables.put(id, new Value(("%" + id), type, true));
-            break;
-
-         case VariableScope.function:
-            functionVariables.put(id, new Value(("%" + id), type, true));
-            break;
-
-         default:
-            System.err.println("Scope is incorrect" + scope);
-            System.exit(1);
-      }
-   }
-
-   public String load(Value val) {
-      String currId = val.name;
-      if (val.isMalloc) {
-         int anyReg = LLVMGenerator.loadAny(val.name);
-         currId = "%" + String.valueOf(anyReg);
-      }
-      int currReg = LLVMGenerator.load(currId, typesString[val.type.ordinal()]);
-      return "%" + String.valueOf(currReg);
    }
 
    public void clearFunctionVariables() {
@@ -138,7 +119,6 @@ class Variables {
 }
 
 public class LLVMActions extends LangXBaseListener {
-   String[] typesString = new String[] { "i32", "i64", "double", "float", "double" };
 
    Variables variables = new Variables();
    HashMap<String, VarType> functions = new HashMap<>();
@@ -153,11 +133,9 @@ public class LLVMActions extends LangXBaseListener {
       System.exit(1);
    }
 
-   String[] typesStringLang = new String[] { "int", "int64", "real", "float32", "float64" };
-
    public int findTypeIdx(String value) {
-      for (int i = 0; i < typesStringLang.length; i++) {
-         if (typesStringLang[i].equals(value)) {
+      for (int i = 0; i < Const.typesLang.length; i++) {
+         if (Const.typesLang[i].equals(value)) {
             return i;
          }
       }
@@ -170,20 +148,26 @@ public class LLVMActions extends LangXBaseListener {
       String type = ctx.type().getText();
 
       if (type.equals("any")) {
-         variables.putMalloc(ID, VarType.ANY);
+         Value val = new Value(ID, VarType.ANY);
+         VariableI variable = new Any(val);
+         variables.put(variable);
          LLVMGenerator.declare(ID, "ptr");
          return;
       }
 
       if (type.equals("struct")) {
-         variables.putMalloc(ID, VarType.STRUCT);
+         Value val = new Value(ID, VarType.STRUCT);
+         VariableI variable = new Struct(val);
+         variables.put(variable);
          LLVMGenerator.declare(ID, "ptr");
          return;
       }
 
       int i = findTypeIdx(type);
-      variables.put(ID, VarType.values()[i]);
-      LLVMGenerator.declare(ID, typesString[i]);
+      Value val = new Value(ID, VarType.values()[i]);
+      Variable variable = new Variable(val);
+      variables.put(variable);
+      LLVMGenerator.declare(ID, Const.typesLLVM[i]);
    }
 
    private void initStructMalloc(String id, String idTarget) {
@@ -202,18 +186,19 @@ public class LLVMActions extends LangXBaseListener {
    public void exitAssignStruct(LangXParser.AssignStructContext ctx) {
       String ID = ctx.ID(0).getText();
       String IDTARGET = ctx.ID(1).getText();
-      Value id = variables.get(ID, ctx);
-      id.structID = IDTARGET;
-      initStructMalloc(id.name, IDTARGET);
+      ArrayList<Value> list = structures.get(IDTARGET);
+      VariableI structure = new Struct(ID, list, IDTARGET);
+      variables.put(structure);
+      initStructMalloc(structure.getValue().name, IDTARGET);
    }
 
    @Override
    public void exitAssignTypedStruct(LangXParser.AssignTypedStructContext ctx) {
       String ID = ctx.ID(0).getText();
       String IDTARGET = ctx.ID(1).getText();
-      variables.putMalloc(ID, VarType.STRUCT);
-      Value val = variables.get(ID, ctx);
-      val.structID = IDTARGET;
+      ArrayList<Value> list = structures.get(IDTARGET);
+      VariableI structure = new Struct(ID, list, IDTARGET);
+      variables.put(structure);
       LLVMGenerator.declare(ID, "ptr");
       initStructMalloc("%" + ID, IDTARGET);
    }
@@ -224,24 +209,28 @@ public class LLVMActions extends LangXBaseListener {
       String type = ctx.type().getText();
 
       Value val = stack.pop();
-      int i = findTypeIdx(type);
 
       if (type.equals("any")) {
-         variables.putMalloc(ID, val.type);
+         Value valAny = new Value(ID, VarType.ANY);
+         Any any = new Any(valAny);
+         variables.put(any);
          LLVMGenerator.declare(ID, "ptr");
-         int typeSize = 4;
-         if (val.type == VarType.REAL || val.type == VarType.FLOAT64) {
-            typeSize = 8;
-         }
-         LLVMGenerator.assignAny("%" + ID, typesString[val.type.ordinal()], val.name, typeSize);
+         any.store(val);
          return;
       }
 
-      LLVMGenerator.declare(ID, typesString[i]);
+      int i = findTypeIdx(type);
 
-      variables.put(ID, VarType.values()[i]);
-      Value variable = variables.get(ID, ctx);
-      LLVMGenerator.assign(variable.name, val.name, typesString[i]);
+      if (val.type != VarType.values()[i]) {
+         error(ctx.getStart().getLine(), "Left type is: " + type + "but right side type is: " + Const.typesLLVM[i]);
+      }
+
+      LLVMGenerator.declare(ID, Const.typesLLVM[i]);
+
+      Value curr = new Value(ID, val.type);
+      Variable var = new Variable(curr);
+      variables.put(var);
+      var.store(val);
    }
 
    @Override
@@ -249,19 +238,28 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID().getText();
       String type = ctx.type().getText();
 
+      int i = findTypeIdx(type);
+
       if (type.equals("any")) {
-         error(ctx.getStart().getLine(), "Global can't be any");
+         VariableScope curr = variables.scope;
+         variables.scope = VariableScope.global;
+         Any val = new Any(ID, VarType.ANY);
+         variables.put(val);
+         variables.scope = curr;
+         LLVMGenerator.declareGlobal(ID, Const.typesLLVM[i], "null");
+         return;
       }
 
-      int i = findTypeIdx(type);
       VariableScope curr = variables.scope;
       variables.scope = VariableScope.global;
-      variables.put(ID, VarType.values()[i]);
+      Variable val = new Variable(ID, VarType.values()[i]);
+      variables.put(val);
       variables.scope = curr;
+
       String defaultVal = "0";
       if (VarType.values()[i] != VarType.INT && VarType.values()[i] != VarType.INT64)
          defaultVal = "0.0";
-      LLVMGenerator.declareGlobal(ID, typesString[i], defaultVal);
+      LLVMGenerator.declareGlobal(ID, Const.typesLLVM[i], defaultVal);
    }
 
    @Override
@@ -276,11 +274,12 @@ public class LLVMActions extends LangXBaseListener {
       int i = findTypeIdx(type);
 
       Value val = stack.pop();
-      LLVMGenerator.declareGlobal(ID, typesString[i], val.name);
+      LLVMGenerator.declareGlobal(ID, Const.typesLLVM[i], val.name);
 
       VariableScope curr = variables.scope;
       variables.scope = VariableScope.global;
-      variables.put(ID, VarType.values()[i]);
+      Variable var = new Variable(ID, VarType.values()[i]);
+      variables.put(var);
       variables.scope = curr;
    }
 
@@ -288,27 +287,15 @@ public class LLVMActions extends LangXBaseListener {
    public void exitAssign(LangXParser.AssignContext ctx) {
       String ID = ctx.ID().getText();
       Value v = stack.pop();
-      Value val = variables.get(ID, ctx);
+      VariableI val = variables.get(ID, ctx);
 
-      if (val.isMalloc) {
-         if (val.type != VarType.ANY) {
-            LLVMGenerator.free(val.name);
-         }
-         int typeSize = 4;
-         if (val.type == VarType.REAL || val.type == VarType.FLOAT64) {
-            typeSize = 8;
-         }
-         LLVMGenerator.assignAny(val.name, typesString[v.type.ordinal()], v.name, typeSize);
-         variables.putMalloc(ID, v.type);
+      if (!(val instanceof Any) && val.getValue().type != v.type) {
+         error(ctx.getStart().getLine(), "Incompatible types: expected " + val.getValue().type + ", got " + v.type);
          return;
       }
 
-      if (val.type != v.type) {
-         error(ctx.getStart().getLine(), "Incompatible types: expected " + val.type + ", got " + v.type);
-         return;
-      }
-
-      LLVMGenerator.assign(val.name, v.name, typesString[v.type.ordinal()]);
+      val.store(v);
+      val.getValue().type = v.type;
    }
 
    @Override
@@ -316,34 +303,17 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID(0).getText();
       String KEY = ctx.ID(1).getText();
       Value v = stack.pop();
-      Value val = variables.get(ID, ctx);
-      ArrayList<Value> list = structures.get(val.structID);
-
-      int index = IntStream.range(0, list.size())
-            .filter(i -> KEY.equals(list.get(i).name))
-            .findFirst()
-            .orElse(-1);
-
-      int id = LLVMGenerator.loadStruct(ID, val.structID, index);
-      LLVMGenerator.assignStruct(typesString[list.get(index).type.ordinal()], v.name, String.valueOf(id));
+      Struct val = (Struct) variables.get(ID, ctx);
+      val.store(v, KEY);
    }
 
    public void exitStructValue(LangXParser.StructValueContext ctx) {
       String ID = ctx.ID(0).getText();
       String KEY = ctx.ID(1).getText();
 
-      Value val = variables.get(ID, ctx);
-      ArrayList<Value> list = structures.get(val.structID);
-
-      int index = IntStream.range(0, list.size())
-            .filter(i -> KEY.equals(list.get(i).name))
-            .findFirst()
-            .orElse(-1);
-
-      int id = LLVMGenerator.loadStruct(ID, val.structID, index);
-      VarType type = list.get(index).type;
-      int idCorrectType = LLVMGenerator.loadPtrToType("%" + id, typesString[type.ordinal()]);
-      Value newVal = new Value("%" + idCorrectType, type);
+      Struct val = (Struct) variables.get(ID, ctx);
+      String idKey = val.loadKeyToValue(KEY);
+      Value newVal = new Value(idKey, val.getKeyType(KEY));
       stack.push(newVal);
    }
 
@@ -357,57 +327,9 @@ public class LLVMActions extends LangXBaseListener {
    @Override
    public void exitIdStat(LangXParser.IdStatContext ctx) {
       String ID = ctx.ID().getText();
-      Value val = variables.get(ID, ctx);
-      String id = variables.load(val);
-      stack.push(new Value(id, val.type));
-   }
-
-   @Override
-   public void exitInt(LangXParser.IntContext ctx) {
-      stack.push(new Value(ctx.INT().getText(), VarType.INT));
-   }
-
-   @Override
-   public void exitInt64(LangXParser.Int64Context ctx) {
-      String val = ctx.INT64().getText();
-      stack.push(new Value(val.substring(0, val.length() - 1), VarType.INT64));
-   }
-
-   @Override
-   public void exitReal(LangXParser.RealContext ctx) {
-      stack.push(new Value(ctx.REAL().getText(), VarType.REAL));
-   }
-
-   @Override
-   public void exitFloat32(LangXParser.Float32Context ctx) {
-      String val = ctx.FLOAT32().getText();
-      stack.push(new Value(val.substring(0, val.length() - 1), VarType.FLOAT32));
-   }
-
-   @Override
-   public void exitFloat64(LangXParser.Float64Context ctx) {
-      String val = ctx.FLOAT64().getText();
-      stack.push(new Value(val.substring(0, val.length() - 1), VarType.FLOAT64));
-   }
-
-   @Override
-   public void exitAdd(LangXParser.AddContext ctx) {
-      binaryOp(ctx, "add");
-   }
-
-   @Override
-   public void exitSub(LangXParser.SubContext ctx) {
-      binaryOp(ctx, "sub");
-   }
-
-   @Override
-   public void exitMult(LangXParser.MultContext ctx) {
-      binaryOp(ctx, "mult");
-   }
-
-   @Override
-   public void exitDiv(LangXParser.DivContext ctx) {
-      binaryOp(ctx, "div");
+      VariableI val = variables.get(ID, ctx);
+      String id = val.load();
+      stack.push(new Value(id, val.getValue().type));
    }
 
    private void binaryOp(ParserRuleContext ctx, String op) {
@@ -459,9 +381,7 @@ public class LLVMActions extends LangXBaseListener {
 
    @Override
    public void exitPrint(LangXParser.PrintContext ctx) {
-      String ID = ctx.ID().getText();
-      Value val = variables.get(ID, ctx);
-      variables.load(val);
+      Value val = stack.pop();
       switch (val.type) {
          case INT:
             LLVMGenerator.printf_i32(val.name);
@@ -479,52 +399,15 @@ public class LLVMActions extends LangXBaseListener {
             LLVMGenerator.printf_float64(val.name);
             break;
          default:
-            error(ctx.getStart().getLine(), "unknown variable " + ID);
-      }
-   }
-
-   public void exitPrintStruct(LangXParser.PrintStructContext ctx) {
-      String ID = ctx.ID(0).getText();
-      String KEY = ctx.ID(1).getText();
-
-      Value variable = variables.get(ID, ctx);
-      ArrayList<Value> list = structures.get(variable.structID);
-
-      int index = IntStream.range(0, list.size())
-            .filter(i -> KEY.equals(list.get(i).name))
-            .findFirst()
-            .orElse(-1);
-
-      int id = LLVMGenerator.loadStruct(ID, variable.structID, index);
-      VarType type = list.get(index).type;
-      int idCorrectType = LLVMGenerator.loadPtrToType("%" + id, typesString[type.ordinal()]);
-      Value val = new Value("%" + idCorrectType, type);
-
-      switch (val.type) {
-         case INT:
-            LLVMGenerator.printf_i32(val.name);
-            break;
-         case INT64:
-            LLVMGenerator.printf_i64(val.name);
-            break;
-         case REAL:
-            LLVMGenerator.printf_double(val.name);
-            break;
-         case FLOAT32:
-            LLVMGenerator.printf_float32(val.name);
-            break;
-         case FLOAT64:
-            LLVMGenerator.printf_float64(val.name);
-            break;
-         default:
-            error(ctx.getStart().getLine(), "unknown variable " + ID);
+            error(ctx.getStart().getLine(), "unknown variable " + val.name);
       }
    }
 
    @Override
    public void exitRead(LangXParser.ReadContext ctx) {
       String ID = ctx.ID().getText();
-      Value val = variables.get(ID, ctx);
+      Any var = (Any) variables.get(ID, ctx);
+      Value val = var.getValue();
       switch (val.type) {
          case INT:
             LLVMGenerator.scanf_i32(ID);
@@ -552,7 +435,7 @@ public class LLVMActions extends LangXBaseListener {
       VarType type = functions.get(id);
       if (type == VarType.VOID)
          type = VarType.INT;
-      int newId = LLVMGenerator.call(id, typesString[type.ordinal()]);
+      int newId = LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
       String ID = "%" + String.valueOf(newId);
       Value val = new Value(ID, type);
       stack.add(val);
@@ -564,7 +447,7 @@ public class LLVMActions extends LangXBaseListener {
       VarType type = functions.get(id);
       if (type == VarType.VOID)
          type = VarType.INT;
-      LLVMGenerator.call(id, typesString[type.ordinal()]);
+      LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
    }
 
    @Override
@@ -578,7 +461,7 @@ public class LLVMActions extends LangXBaseListener {
       functions.put(ID, type);
       function = val;
       if (type != VarType.VOID) {
-         LLVMGenerator.functionstartType(ID, typesString[type.ordinal()]);
+         LLVMGenerator.functionstartType(ID, Const.typesLLVM[type.ordinal()]);
       } else {
          LLVMGenerator.functionstart(ID);
       }
@@ -587,7 +470,7 @@ public class LLVMActions extends LangXBaseListener {
    @Override
    public void exitReturn(LangXParser.ReturnContext ctx) {
       Value val = stack.pop();
-      LLVMGenerator.addReturn(typesString[val.type.ordinal()], val.name);
+      LLVMGenerator.addReturn(Const.typesLLVM[val.type.ordinal()], val.name);
       isReturn = true;
    }
 
@@ -626,9 +509,9 @@ public class LLVMActions extends LangXBaseListener {
          error(ctx.getStart().getLine(), "incompatible types");
 
       if (val1.type == VarType.INT | val1.type == VarType.INT64) {
-         LLVMGenerator.icmp(val1.name, val2.name, typesString[val1.type.ordinal()]);
+         LLVMGenerator.icmp(val1.name, val2.name, Const.typesLLVM[val1.type.ordinal()]);
       } else {
-         LLVMGenerator.fcmp(val1.name, val2.name, typesString[val1.type.ordinal()]);
+         LLVMGenerator.fcmp(val1.name, val2.name, Const.typesLLVM[val1.type.ordinal()]);
       }
    }
 
@@ -645,7 +528,6 @@ public class LLVMActions extends LangXBaseListener {
 
    @Override
    public void exitStructVal(LangXParser.StructValContext ctx) {
-
       String ID = ctx.ID().getText();
       String type = ctx.type().getText();
       int i = findTypeIdx(type);
@@ -658,7 +540,7 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID().getText();
       String values = "";
       for (Value val : structValues) {
-         values += typesString[val.type.ordinal()] + ", ";
+         values += Const.typesLLVM[val.type.ordinal()] + ", ";
       }
       String trimmed = values.substring(0, values.length() - 2);
       LLVMGenerator.structInit(ID, trimmed);
@@ -668,6 +550,54 @@ public class LLVMActions extends LangXBaseListener {
       }
       structures.put(ID, list);
       structValues.clear();
+   }
+
+   @Override
+   public void exitInt(LangXParser.IntContext ctx) {
+      stack.push(new Value(ctx.INT().getText(), VarType.INT));
+   }
+
+   @Override
+   public void exitInt64(LangXParser.Int64Context ctx) {
+      String val = ctx.INT64().getText();
+      stack.push(new Value(val.substring(0, val.length() - 1), VarType.INT64));
+   }
+
+   @Override
+   public void exitReal(LangXParser.RealContext ctx) {
+      stack.push(new Value(ctx.REAL().getText(), VarType.REAL));
+   }
+
+   @Override
+   public void exitFloat32(LangXParser.Float32Context ctx) {
+      String val = ctx.FLOAT32().getText();
+      stack.push(new Value(val.substring(0, val.length() - 1), VarType.FLOAT32));
+   }
+
+   @Override
+   public void exitFloat64(LangXParser.Float64Context ctx) {
+      String val = ctx.FLOAT64().getText();
+      stack.push(new Value(val.substring(0, val.length() - 1), VarType.FLOAT64));
+   }
+
+   @Override
+   public void exitAdd(LangXParser.AddContext ctx) {
+      binaryOp(ctx, "add");
+   }
+
+   @Override
+   public void exitSub(LangXParser.SubContext ctx) {
+      binaryOp(ctx, "sub");
+   }
+
+   @Override
+   public void exitMult(LangXParser.MultContext ctx) {
+      binaryOp(ctx, "mult");
+   }
+
+   @Override
+   public void exitDiv(LangXParser.DivContext ctx) {
+      binaryOp(ctx, "div");
    }
 
 }
