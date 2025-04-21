@@ -1,6 +1,12 @@
 grammar LangX;
 
-prog: ( (stat|function|struct)? NEWLINE )* ;
+prog: ( (stat|function|struct|class)? NEWLINE )* ;
+
+class: 'class' ID classBlock
+;
+
+classBlock: '{' (structVal? NEWLINE)* (function? NEWLINE)* '}'
+;
 
 struct: 'struct' ID structBlock
 ;
@@ -25,16 +31,17 @@ return: 'return' expr0 NEWLINE
 
 stat:   ID ':' type                     #assignType
       | ID'.'ID '=' expr0               #assignStructKey
-      | ID '=' 'struct' ID              #assignStruct
-      | ID ':' 'struct' '=' 'struct' ID #assignTypedStruct
+      | ID ':' 'struct' ID              #assignTypedStruct
+      | ID ':' 'class' ID               #assignTypedStruct
       | ID ':' type '=' expr0           #assignTyped
       | 'global' ID ':' type            #assignTypeGlobal
       | 'global' ID ':' type '=' expr0  #assignTypedGlobal
       | ID '=' expr0                    #assign
-      | PRINT expr0                             #print
+      | PRINT expr0                     #print
       | READ ID                         #read
-      | ID '(' ')'    				          #callSingle
-      | IF equal '{' blockif '}'	      #if
+      | ID '()'    			    #callSingle
+      | ID.ID '()'                      #callClass                    
+      | IF equal '{' blockif '}'	    #if
       | 'for' expr0 '{' blockfor '}'    #for
     ;
 
@@ -79,7 +86,8 @@ expr4:   INT                           #int
        | TOFLOAT32 expr4               #tofloat32
        | TOFLOAT64 expr4               #tofloat64
        | '(' expr0 ')'                 #par
-       | ID '(' ')'    		         #call
+       | ID '()'    		         #call
+       | ID.ID '()'                    #callClassReturn       
     ;
 
 valueOfID: ID                         #idStat
@@ -92,7 +100,6 @@ type:   'int'
       | 'float32'
       | 'float64'
       | 'any'
-      | 'struct'
     ;
 
 funcType:   'int'

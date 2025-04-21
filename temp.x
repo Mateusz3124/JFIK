@@ -51,3 +51,17 @@ v.val = 4 + v.val
 v.zen = 10.0f / 2.0f
 print v.val
 print v.zen
+
+
+class Klasa {
+  x : int
+  fun see : int {
+      print this.x
+      return this.x
+  }
+}
+
+klasa : class Klasa
+klasa.x = 4
+print klasa.x
+klasa.see()

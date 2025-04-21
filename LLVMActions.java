@@ -8,7 +8,7 @@ import java.util.stream.IntStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 
 enum VarType {
-   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN, ANY, STRUCT
+   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN, ANY, STRUCT, CLASS
 }
 
 class Value {
@@ -122,11 +122,13 @@ public class LLVMActions extends LangXBaseListener {
 
    Variables variables = new Variables();
    HashMap<String, VarType> functions = new HashMap<>();
+   HashMap<String, ArrayList<Value>> classFunctions = new HashMap<>();
    HashMap<String, ArrayList<Value>> structures = new HashMap<>();
    Stack<Value> stack = new Stack<>();
    Stack<Value> structValues = new Stack<>();
    boolean isReturn = false;
    Value function;
+   Value classVal;
 
    void error(int line, String msg) {
       System.err.println("Error, line " + line + ": " + msg);
@@ -180,16 +182,6 @@ public class LLVMActions extends LangXBaseListener {
       }
       LLVMGenerator.malloc(id, typeSize * list.size());
       return;
-   }
-
-   @Override
-   public void exitAssignStruct(LangXParser.AssignStructContext ctx) {
-      String ID = ctx.ID(0).getText();
-      String IDTARGET = ctx.ID(1).getText();
-      ArrayList<Value> list = structures.get(IDTARGET);
-      VariableI structure = new Struct(ID, list, IDTARGET);
-      variables.put(structure);
-      initStructMalloc(structure.getValue().name, IDTARGET);
    }
 
    @Override
@@ -442,6 +434,31 @@ public class LLVMActions extends LangXBaseListener {
    }
 
    @Override
+   public void exitCallClassReturn(LangXParser.CallClassReturnContext ctx) {
+      String classVal = ctx.ID(0).getText();
+      String function = ctx.ID(1).getText();
+
+      Struct struct = (Struct) variables.get(classVal, ctx);
+
+      Value fun = classFunctions.get(struct.structId).stream()
+            .filter(val -> val.name.equals(classVal + function))
+            .findFirst()
+            .orElse(null);
+      ;
+
+      VarType type = fun.type;
+
+      String idStruct = struct.load();
+
+      if (type == VarType.VOID)
+         type = VarType.INT;
+      int newId = LLVMGenerator.call(fun.name, Const.typesLLVM[type.ordinal()], " ptr noundef " + idStruct + " ");
+      String ID = "%" + String.valueOf(newId);
+      Value val = new Value(ID, type);
+      stack.add(val);
+   }
+
+   @Override
    public void exitCallSingle(LangXParser.CallSingleContext ctx) {
       String id = ctx.ID().getText();
       VarType type = functions.get(id);
@@ -451,19 +468,73 @@ public class LLVMActions extends LangXBaseListener {
    }
 
    @Override
+   public void exitCallClass(LangXParser.CallClassContext ctx) {
+      String classVal = ctx.ID(0).getText();
+      String function = ctx.ID(1).getText();
+
+      Struct struct = (Struct) variables.get(classVal, ctx);
+
+      Value fun = classFunctions.get(struct.structId).stream()
+            .filter(val -> val.name.equals(struct.structId + function))
+            .findFirst()
+            .orElse(null);
+      ;
+
+      VarType type = fun.type;
+
+      String idStruct = struct.load();
+
+      if (type == VarType.VOID)
+         type = VarType.INT;
+      LLVMGenerator.call(fun.name, Const.typesLLVM[type.ordinal()], " ptr noundef " + idStruct + " ");
+   }
+
+   @Override
    public void exitFparam(LangXParser.FparamContext ctx) {
       String ID = ctx.ID().getText();
       String funcType = ctx.funcType().getText();
       VarType type = VarType.valueOf(funcType.toUpperCase());
 
+      String args = "";
+
+      if (classVal != null) {
+         if (!structValues.empty()) {
+            String values = "";
+            for (Value valForEach : structValues) {
+               values += Const.typesLLVM[valForEach.type.ordinal()] + ", ";
+            }
+            String trimmed = values.substring(0, values.length() - 2);
+            LLVMGenerator.structInit(classVal.name, trimmed);
+
+            ArrayList<Value> list = new ArrayList<>();
+            for (Value v : structValues) {
+               list.add(v);
+            }
+
+            structures.put(classVal.name, list);
+            structValues.clear();
+         }
+         args = " ptr %0 ";
+         ID = classVal.name + ID;
+      }
+
       Value val = new Value(ID, type);
       variables.scope = VariableScope.function;
       functions.put(ID, type);
       function = val;
+
       if (type != VarType.VOID) {
-         LLVMGenerator.functionstartType(ID, Const.typesLLVM[type.ordinal()]);
+         LLVMGenerator.functionstartType(ID, Const.typesLLVM[type.ordinal()], args);
       } else {
-         LLVMGenerator.functionstart(ID);
+         LLVMGenerator.functionstartType(ID, "i32", args);
+      }
+      if (classVal != null) {
+         ArrayList<Value> keys = structures.get(classVal.name);
+         Struct struct = new Struct("this", keys, classVal.name);
+         variables.put(struct);
+         LLVMGenerator.initThis();
+         ArrayList<Value> list = classFunctions.get(classVal.name);
+         list.add(function);
       }
    }
 
@@ -550,6 +621,18 @@ public class LLVMActions extends LangXBaseListener {
       }
       structures.put(ID, list);
       structValues.clear();
+   }
+
+   @Override
+   public void enterClass(LangXParser.ClassContext ctx) {
+      String id = ctx.ID().getText();
+      classVal = new Value(id, VarType.CLASS);
+      classFunctions.put(id, new ArrayList<>());
+   }
+
+   @Override
+   public void exitClass(LangXParser.ClassContext ctx) {
+      classVal = null;
    }
 
    @Override

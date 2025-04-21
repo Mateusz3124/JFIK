@@ -1,10 +1,9 @@
-
-global z : any
+global z : int
 z = 20
 
 fun add : float32 { 
   print z
-  z = 8.0f
+  z = 8
   x : float32
   x = 5.0f + 2.0f
   return x
@@ -31,8 +30,8 @@ fun loop : void {
 
 zet : float32 = 5.0f
 zet = add() 
-print z
 print zet
+print z
 see()
 loop()
 
@@ -46,9 +45,23 @@ struct x {
   zen : float32
 }
 
-v : struct = struct x
+v : struct x
 v.val = 4
 v.val = 4 + v.val
 v.zen = 10.0f / 2.0f
 print v.val
 print v.zen
+
+
+class Klasa {
+  x : int
+  fun see : int {
+      print this.x
+      return this.x
+  }
+}
+
+klasa : class Klasa
+klasa.x = 4
+print klasa.x
+klasa.see()

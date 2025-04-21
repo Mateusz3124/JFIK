@@ -289,18 +289,17 @@ class LLVMGenerator {
       reg++;
    }
 
-   public static void functionstart(String id) {
+   public static void functionstartType(String id, String type, String args) {
       main_text += buffer;
       main_tmp = reg;
-      buffer = "define i32 @" + id + "() nounwind {\n";
+      buffer = "define " + type + " @" + id + "(" + args + ") nounwind {\n";
       reg = 1;
    }
 
-   public static void functionstartType(String id, String type) {
-      main_text += buffer;
-      main_tmp = reg;
-      buffer = "define " + type + " @" + id + "() nounwind {\n";
-      reg = 1;
+   public static void initThis() {
+      buffer += "%this = alloca ptr\n";
+      buffer += "store ptr %0, ptr %this\n";
+      reg++;
    }
 
    public static void functionend() {
@@ -324,6 +323,11 @@ class LLVMGenerator {
 
    public static int call(String id, String type) {
       buffer += "%" + reg + " = call " + type + " @" + id + "()\n";
+      return reg++;
+   }
+
+   public static int call(String id, String type, String args) {
+      buffer += "%" + reg + " = call " + type + " @" + id + "(" + args + ")\n";
       return reg++;
    }
 
