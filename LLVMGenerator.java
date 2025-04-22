@@ -106,6 +106,10 @@ class LLVMGenerator {
       buffer += "store " + type + " " + val + ", ptr " + id + "\n";
    }
 
+   public static void assignPtrPtr(String id1, String id2) {
+      buffer += "store ptr " + id1 + ", ptr " + id2 + "\n";
+   }
+
    public static void assign(String id, String value, String type) {
       buffer += "store " + type + " " + value + ", " + type + "* " + id + "\n";
    }

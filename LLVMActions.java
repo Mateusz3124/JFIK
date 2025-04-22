@@ -8,7 +8,7 @@ import java.util.stream.IntStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 
 enum VarType {
-   INT, INT64, REAL, FLOAT32, FLOAT64, VOID, UNKNOWN, ANY, STRUCT, CLASS
+   INT, INT64, REAL, FLOAT32, FLOAT64, ANY, STRUCT, CLASS, VOID, UNKNOWN,
 }
 
 class Value {
@@ -285,7 +285,11 @@ public class LLVMActions extends LangXBaseListener {
          error(ctx.getStart().getLine(), "Incompatible types: expected " + val.getValue().type + ", got " + v.type);
          return;
       }
-
+      if (v.type == VarType.STRUCT && val instanceof Any) {
+         Struct struct = (Struct) variables.get(v.structID, ctx);
+         ((Any) val).storeStruct(struct);
+         return;
+      }
       val.store(v);
       val.getValue().type = v.type;
    }
@@ -295,15 +299,26 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID(0).getText();
       String KEY = ctx.ID(1).getText();
       Value v = stack.pop();
-      Struct val = (Struct) variables.get(ID, ctx);
+      VariableI variable = variables.get(ID, ctx);
+      Struct val;
+      if (variable instanceof Any) {
+         val = ((Any) variable).geStruct();
+      } else {
+         val = (Struct) variable;
+      }
       val.store(v, KEY);
    }
 
    public void exitStructValue(LangXParser.StructValueContext ctx) {
       String ID = ctx.ID(0).getText();
       String KEY = ctx.ID(1).getText();
-
-      Struct val = (Struct) variables.get(ID, ctx);
+      VariableI variable = variables.get(ID, ctx);
+      Struct val;
+      if (variable instanceof Any) {
+         val = (((Any) variable).geStruct());
+      } else {
+         val = (Struct) variable;
+      }
       String idKey = val.loadKeyToValue(KEY);
       Value newVal = new Value(idKey, val.getKeyType(KEY));
       stack.push(newVal);
@@ -321,7 +336,11 @@ public class LLVMActions extends LangXBaseListener {
       String ID = ctx.ID().getText();
       VariableI val = variables.get(ID, ctx);
       String id = val.load();
-      stack.push(new Value(id, val.getValue().type));
+      Value newVal = new Value(id, val.getValue().type);
+      if (newVal.type == VarType.STRUCT) {
+         newVal.structID = ID;
+      }
+      stack.push(newVal);
    }
 
    private void binaryOp(ParserRuleContext ctx, String op) {
