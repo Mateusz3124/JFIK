@@ -45,7 +45,7 @@ struct x {
   zen : float32
 }
 
-v : struct = struct x
+v : struct x
 v.val = 4
 v.val = 4 + v.val
 v.zen = 10.0f / 2.0f
@@ -65,3 +65,16 @@ klasa : class Klasa
 klasa.x = 4
 print klasa.x
 klasa.see()
+
+gen add : float32 { 
+  x : float32
+  x = 5.0f + 2.0f
+  print x
+  return x
+  z : float32 = 5.0f
+  return z
+}
+
+add.next()
+valueGen : float32 = add.next()
+print valueGen

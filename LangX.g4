@@ -1,6 +1,6 @@
 grammar LangX;
 
-prog: ( (stat|function|struct|class)? NEWLINE )* ;
+prog: ( (stat|function|struct|class|generator)? NEWLINE )* ;
 
 class: 'class' ID classBlock
 ;
@@ -20,13 +20,20 @@ structVal: ID ':' type
 function: FUNCTION fparam fblock ENDFUNCTION
 ;
 
+generator: GENERATOR fparam gblock
+;
+
+
 fparam: ID ':' funcType
 ;
 
-fblock: '{' ( stat? NEWLINE )* return?
+fblock: '{' ( stat? NEWLINE )* (return NEWLINE)?
 ; 
 
-return: 'return' expr0 NEWLINE
+gblock: '{' ( (stat|return)? NEWLINE )* '}'
+; 
+
+return: 'return' expr0
 ;
 
 stat:   ID ':' type                     #assignType
@@ -41,6 +48,7 @@ stat:   ID ':' type                     #assignType
       | READ ID                         #read
       | ID '()'    			    #callSingle
       | ID.ID '()'                      #callClass                    
+      | ID.NEXT '()'                    #callGenerator                  
       | IF equal '{' blockif '}'	    #if
       | 'for' expr0 '{' blockfor '}'    #for
     ;
@@ -88,6 +96,7 @@ expr4:   INT                           #int
        | '(' expr0 ')'                 #par
        | ID '()'    		         #call
        | ID.ID '()'                    #callClassReturn       
+       | ID.NEXT '()'                  #callGeneratorReturn       
     ;
 
 valueOfID: ID                         #idStat
@@ -113,8 +122,13 @@ funcType:   'int'
 FUNCTION: 'fun'
 ;
 
+GENERATOR: 'gen'
+;
+
 ENDFUNCTION:	'}'
 ;
+
+NEXT: 'next' ;
 
 PRINT: 'print' ;
 READ: 'read' ;

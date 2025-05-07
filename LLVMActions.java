@@ -453,6 +453,19 @@ public class LLVMActions extends LangXBaseListener {
    }
 
    @Override
+   public void exitCallGeneratorReturn(LangXParser.CallGeneratorReturnContext ctx) {
+      String id = ctx.ID().getText();
+      VarType type = functions.get(id);
+      if (type == VarType.VOID)
+         type = VarType.INT;
+      int newId = LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
+      LLVMGenerator.generatorIterate(id);
+      String ID = "%" + String.valueOf(newId);
+      Value val = new Value(ID, type);
+      stack.add(val);
+   }
+
+   @Override
    public void exitCallClassReturn(LangXParser.CallClassReturnContext ctx) {
       String classVal = ctx.ID(0).getText();
       String function = ctx.ID(1).getText();
@@ -484,6 +497,16 @@ public class LLVMActions extends LangXBaseListener {
       if (type == VarType.VOID)
          type = VarType.INT;
       LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
+   }
+
+   @Override
+   public void exitCallGenerator(LangXParser.CallGeneratorContext ctx) {
+      String id = ctx.ID().getText();
+      VarType type = functions.get(id);
+      if (type == VarType.VOID)
+         type = VarType.INT;
+      LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
+      LLVMGenerator.generatorIterate(id);
    }
 
    @Override
@@ -578,6 +601,22 @@ public class LLVMActions extends LangXBaseListener {
          }
       }
       LLVMGenerator.functionendReturn();
+   }
+
+   @Override
+   public void exitGblock(LangXParser.GblockContext ctx) {
+      variables.scope = VariableScope.main;
+      variables.clearFunctionVariables();
+      if (function.type != VarType.VOID) {
+         if (isReturn) {
+            LLVMGenerator.generatorend(function.name, Const.typesLLVM[function.type.ordinal()]);
+            isReturn = true;
+            return;
+         } else {
+            error(ctx.getStart().getLine(), "no return");
+         }
+      }
+      LLVMGenerator.generatorendReturn(function.name);
    }
 
    @Override

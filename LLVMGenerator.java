@@ -2,6 +2,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Stack;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 class LLVMGenerator {
 
@@ -306,6 +308,10 @@ class LLVMGenerator {
       reg++;
    }
 
+   public static void addReturn(String type, String val) {
+      buffer = buffer + "ret " + type + " " + val + "\n";
+   }
+
    public static void functionend() {
       buffer += "}\n";
       header_text += buffer;
@@ -313,13 +319,87 @@ class LLVMGenerator {
       reg = main_tmp;
    }
 
-   public static void addReturn(String type, String val) {
-      buffer = buffer + "ret " + type + " " + val + "\n";
-   }
-
    public static void functionendReturn() {
       buffer += "ret i32 0\n";
       buffer += "}\n";
+      header_text += buffer;
+      buffer = "";
+      reg = main_tmp;
+   }
+
+   private static int CountSubstring(String input, String target) {
+      int count = 0;
+      int index = 0;
+
+      while ((index = input.indexOf(target, index)) != -1) {
+         count++;
+         index += target.length();
+      }
+
+      return count;
+   }
+
+   private static String changeToGenerator(String buffer, String name, String type) {
+      buffer = "@" + name + "_iterator" + " = global i32 0\n" + buffer;
+      int returnCount = CountSubstring(buffer, "\nret");
+      String[] parts = buffer.split("\\{\\n");
+      parts[0] += "{\n%loaded_iterator = load i32, i32* @" + name + "_iterator" + "\n";
+      parts[0] += "switch i32 %loaded_iterator, label %default [\n";
+      String[] labels = new String[returnCount];
+      for (int i = 0; i < returnCount; i++) {
+         parts[0] += "i32 " + i + ", label %label_" + i + "\n";
+         labels[i] = "label_" + i;
+      }
+      parts[0] += "]\n";
+      parts[0] += labels[0] + ":    ; preds = %0\n";
+      buffer = parts[0] + parts[1];
+      String[] lines = buffer.split("\n");
+
+      StringBuilder result = new StringBuilder();
+
+      int counter = 1;
+      for (String line : lines) {
+         if (line.startsWith("ret") && counter < returnCount) {
+            line = line + "\n" + labels[counter] + ":    ; preds = %" + counter;
+            counter++;
+         }
+         result.append(line).append("\n");
+      }
+      buffer = result.toString();
+      buffer = buffer.substring(0, buffer.length() - 2);
+      buffer += "default: ; preds = %-1\n";
+      if (type.equals("i32") || type.equals("i64")) {
+         buffer += "ret " + type + " 0\n";
+      } else {
+         buffer += "ret " + type + " 0.0\n";
+      }
+      buffer += "}\n";
+      return buffer;
+   }
+
+   public static void generatorIterate(String name) {
+      String variableName = "@" + name + "_iterator";
+      int currReg = load(variableName, "i32");
+      add_i32("%" + currReg, "1");
+      assign(variableName, "%" + (reg - 1), "i32");
+   }
+
+   public static void generatorend(String name, String type) {
+      buffer += "}\n";
+      buffer = changeToGenerator(buffer, name, type);
+      // System.err.println(buffer);
+      // System.exit(2);
+      header_text += buffer;
+      buffer = "";
+      reg = main_tmp;
+   }
+
+   public static void generatorendReturn(String name) {
+      buffer += "ret i32 0\n";
+      buffer += "}\n";
+      buffer = changeToGenerator(buffer, name, "i32");
+      // System.err.println(buffer);
+      // System.exit(2);
       header_text += buffer;
       buffer = "";
       reg = main_tmp;
