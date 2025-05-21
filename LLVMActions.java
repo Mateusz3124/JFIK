@@ -440,26 +440,33 @@ public class LLVMActions extends LangXBaseListener {
       }
    }
 
+   class Pair {
+      public int first;
+      public int second;
+
+      public Pair(int first, int second) {
+         this.first = first;
+         this.second = second;
+      }
+   }
+
+   HashMap<String, Pair> generators = new HashMap<>();
+
    @Override
    public void exitCall(LangXParser.CallContext ctx) {
       String id = ctx.ID().getText();
       VarType type = functions.get(id);
+      if (generators.containsKey(id)) {
+         Pair pair = generators.get(id);
+         if (pair.first < pair.second - 1) {
+            pair.first += 1;
+         } else {
+            error(ctx.getStart().getLine(), "Generator " + id + " out of bounds");
+         }
+      }
       if (type == VarType.VOID)
          type = VarType.INT;
       int newId = LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
-      String ID = "%" + String.valueOf(newId);
-      Value val = new Value(ID, type);
-      stack.add(val);
-   }
-
-   @Override
-   public void exitCallGeneratorReturn(LangXParser.CallGeneratorReturnContext ctx) {
-      String id = ctx.ID().getText();
-      VarType type = functions.get(id);
-      if (type == VarType.VOID)
-         type = VarType.INT;
-      int newId = LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
-      LLVMGenerator.generatorIterate(id);
       String ID = "%" + String.valueOf(newId);
       Value val = new Value(ID, type);
       stack.add(val);
@@ -497,6 +504,27 @@ public class LLVMActions extends LangXBaseListener {
       if (type == VarType.VOID)
          type = VarType.INT;
       LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
+   }
+
+   @Override
+   public void exitCallGeneratorReturn(LangXParser.CallGeneratorReturnContext ctx) {
+      String id = ctx.ID().getText();
+      VarType type = functions.get(id);
+      if (generators.containsKey(id)) {
+         Pair pair = generators.get(id);
+         if (pair.first < pair.second - 1) {
+            pair.first += 1;
+         } else {
+            error(ctx.getStart().getLine(), "Generator " + id + " out of bounds");
+         }
+      }
+      if (type == VarType.VOID)
+         type = VarType.INT;
+      int newId = LLVMGenerator.call(id, Const.typesLLVM[type.ordinal()]);
+      LLVMGenerator.generatorIterate(id);
+      String ID = "%" + String.valueOf(newId);
+      Value val = new Value(ID, type);
+      stack.add(val);
    }
 
    @Override
@@ -594,7 +622,7 @@ public class LLVMActions extends LangXBaseListener {
       if (function.type != VarType.VOID) {
          if (isReturn) {
             LLVMGenerator.functionend();
-            isReturn = true;
+            isReturn = false;
             return;
          } else {
             error(ctx.getStart().getLine(), "no return");
@@ -609,14 +637,18 @@ public class LLVMActions extends LangXBaseListener {
       variables.clearFunctionVariables();
       if (function.type != VarType.VOID) {
          if (isReturn) {
-            LLVMGenerator.generatorend(function.name, Const.typesLLVM[function.type.ordinal()]);
-            isReturn = true;
+            int ret_num = LLVMGenerator.generatorend(function.name, Const.typesLLVM[function.type.ordinal()]);
+            isReturn = false;
+            Pair local = new Pair(0, ret_num);
+            generators.put(function.name, local);
             return;
          } else {
             error(ctx.getStart().getLine(), "no return");
          }
       }
-      LLVMGenerator.generatorendReturn(function.name);
+      int ret_num = LLVMGenerator.generatorendReturn(function.name);
+      Pair local = new Pair(0, ret_num);
+      generators.put(function.name, local);
    }
 
    @Override

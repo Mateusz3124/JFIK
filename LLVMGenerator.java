@@ -339,7 +339,17 @@ class LLVMGenerator {
       return count;
    }
 
-   private static String changeToGenerator(String buffer, String name, String type) {
+   public static class StringIntPair {
+      public String str;
+      public int num;
+
+      public StringIntPair(String str, int num) {
+         this.str = str;
+         this.num = num;
+      }
+   }
+
+   private static StringIntPair changeToGenerator(String buffer, String name, String type) {
       buffer = "@" + name + "_iterator" + " = global i32 0\n" + buffer;
       int returnCount = CountSubstring(buffer, "\nret");
       String[] parts = buffer.split("\\{\\n");
@@ -374,7 +384,9 @@ class LLVMGenerator {
          buffer += "ret " + type + " 0.0\n";
       }
       buffer += "}\n";
-      return buffer;
+
+      StringIntPair pair = new StringIntPair(buffer, returnCount);
+      return pair;
    }
 
    public static void generatorIterate(String name) {
@@ -384,25 +396,27 @@ class LLVMGenerator {
       assign(variableName, "%" + (reg - 1), "i32");
    }
 
-   public static void generatorend(String name, String type) {
+   public static int generatorend(String name, String type) {
       buffer += "}\n";
-      buffer = changeToGenerator(buffer, name, type);
+      StringIntPair pair = changeToGenerator(buffer, name, type);
       // System.err.println(buffer);
       // System.exit(2);
-      header_text += buffer;
+      header_text += pair.str;
       buffer = "";
       reg = main_tmp;
+      return pair.num;
    }
 
-   public static void generatorendReturn(String name) {
+   public static int generatorendReturn(String name) {
       buffer += "ret i32 0\n";
       buffer += "}\n";
-      buffer = changeToGenerator(buffer, name, "i32");
+      StringIntPair pair = changeToGenerator(buffer, name, "i32");
       // System.err.println(buffer);
       // System.exit(2);
-      header_text += buffer;
+      header_text += pair.str;
       buffer = "";
       reg = main_tmp;
+      return pair.num;
    }
 
    public static int call(String id, String type) {
